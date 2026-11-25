@@ -42,6 +42,30 @@
         let adminMarkers = [];
         let allPinsData = [];
 
+        // GİZLİ YÖNETİCİ GİRİŞİ TETİKLEYİCİLERİ
+        // 1. URL sonuna #admin eklendiğinde (Örn: site.com/#admin)
+        function checkSecretHash() {
+            if (window.location.hash === '#admin' && !auth.currentUser) {
+                openLogin();
+            }
+        }
+        window.addEventListener('hashchange', checkSecretHash);
+        window.addEventListener('DOMContentLoaded', checkSecretHash);
+
+        // 2. Sol üstteki 📍 ikonuna 5 kez hızlıca tıklayınca
+        let secretClicks = 0;
+        let secretTimer = null;
+        window.triggerSecretAdmin = function() {
+            if (auth.currentUser) return;
+            secretClicks++;
+            clearTimeout(secretTimer);
+            secretTimer = setTimeout(() => { secretClicks = 0; }, 2000);
+            if (secretClicks >= 5) {
+                secretClicks = 0;
+                openLogin();
+            }
+        };
+
         map.on('click', function(e) {
             if (auth.currentUser) return;
             selectedCoords = e.latlng;
@@ -109,7 +133,12 @@
         };
 
         window.openLogin = () => document.getElementById('loginModal').style.display = 'flex';
-        window.closeLogin = () => document.getElementById('loginModal').style.display = 'none';
+        window.closeLogin = () => {
+            document.getElementById('loginModal').style.display = 'none';
+            if (window.location.hash === '#admin') {
+                history.replaceState(null, null, ' ');
+            }
+        };
 
         window.adminLogin = async function() {
             const email = document.getElementById('adminEmail').value;
@@ -128,12 +157,10 @@
             if (user) {
                 closeDrawer();
                 document.getElementById('infoBanner').style.display = 'none';
-                document.getElementById('loginBtn').style.display = 'none';
                 document.getElementById('adminControls').style.display = 'flex';
                 loadPins();
             } else {
                 document.getElementById('infoBanner').style.display = 'block';
-                document.getElementById('loginBtn').style.display = 'block';
                 document.getElementById('adminControls').style.display = 'none';
                 clearMarkers();
             }
@@ -219,7 +246,7 @@
             }
         };
 
-        // Geniş Sütunlu, Renkli Başlıklı Gerçek Excel Tablosu (.xls) İndirme
+        // Geniş Sütunlu Gerçek Excel Tablosu (.xls) İndirme
         window.exportExcel = function() {
             if (allPinsData.length === 0) return alert("İndirilecek kayıt bulunamadı.");
             
@@ -281,10 +308,9 @@
         body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         #map { width: 100%; height: 100vh; background: #e5e5e5; }
         .top-bar { position: absolute; top: 12px; right: 12px; z-index: 1000; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-        .info-banner { position: absolute; top: 12px; left: 50px; z-index: 1000; background: rgba(255,255,255,0.96); padding: 10px 14px; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.14); font-size: 13px; color: #2c3e50; max-width: 340px; line-height: 1.4; }
+        .info-banner { position: absolute; top: 12px; left: 50px; z-index: 1000; background: rgba(255,255,255,0.96); padding: 10px 14px; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.14); font-size: 13px; color: #2c3e50; max-width: 340px; line-height: 1.4; user-select: none; }
         .anon-badge { display: inline-block; margin-top: 4px; font-size: 11px; color: #1e8449; background: #eafaf1; padding: 3px 7px; border-radius: 5px; font-weight: 600; }
         button, .filter-select { padding: 7px 11px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-        .btn-admin { background: #2c3e50; color: white; }
         .btn-excel { background: #1d6f42; color: white; }
         .btn-logout { background: #e74c3c; color: white; }
         .filter-select { background: white; color: #333; }
@@ -317,12 +343,11 @@
 <body>
 
     <div id="infoBanner" class="info-banner">
-        <strong>📍 Kampüste neyi sevdin, neyi değiştirmek istersin?</strong><br>
+        <strong><span onclick="triggerSecretAdmin()" style="cursor:default;">📍</span> Kampüste neyi sevdin, neyi değiştirmek istersin?</strong><br>
         <span class="anon-badge">🕵️ Tamamen anonimdir, kimliğin gizli kalır</span>
     </div>
 
     <div class="top-bar">
-        <button id="loginBtn" class="btn-admin" onclick="openLogin()">Admin Girişi</button>
         <div id="adminControls" style="display:none; gap:6px; align-items:center; flex-wrap:wrap;">
             <span id="pinCount" style="background:white; padding:7px 10px; border-radius:6px; font-size:12px; font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.2);">Toplam: 0</span>
             <select class="filter-select" onchange="renderPins(this.value)">
