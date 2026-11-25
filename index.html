@@ -24,7 +24,6 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        // HARİTA PİKSEL ÖLÇÜLERİ (2500x1768)
         const imgWidth = 2500;  
         const imgHeight = 1768; 
 
@@ -43,7 +42,6 @@
         let adminMarkers = [];
         let allPinsData = [];
 
-        // Öğrenci Haritaya Tıkladığında
         map.on('click', function(e) {
             if (auth.currentUser) return;
             selectedCoords = e.latlng;
@@ -74,190 +72,6 @@
             document.getElementById('feedbackDrawer').classList.add('open');
         });
 
-        // Form Gönderme
-        window.submitFeedback = async function() {
-            const type = document.getElementById('type').value;
-            const zone = document.getElementById('zone').value;
-            const comment = document.getElementById('comment').value.trim();
-            if (!comment) return alert("Boş bırakmayalım, fikrini kısaca yazarsan süper olur.");
-
-            const btn = document.getElementById('submitBtn');
-            btn.disabled = true;
-            btn.innerText = "Gönderiliyor...";
-
-            try {
-                await addDoc(collection(db, "pins"), {
-                    type: type,
-                    zone: zone,
-                    comment: comment,
-                    lat: Math.round(selectedCoords.lat),
-                    lng: Math.round(selectedCoords.lng),
-                    createdAt: serverTimestamp()
-                });
-                alert("Mesajın bize ulaştı, çok teşekkürler! 🙌");
-                closeDrawer();
-            } catch (err) {
-                alert("Bir aksilik oldu: " + err.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerText = "Gönder";
-            }
-        };
-
-        window.closeDrawer = function() {
-            document.getElementById('feedbackDrawer').classList.remove('open');
-            document.getElementById('comment').value = '';
-            if (tempMarker) map.removeLayer(tempMarker);
-            if (!auth.currentUser) document.getElementById('infoBanner').style.display = 'block';
-        };
-
-        // Admin Giriş / Çıkış
-        window.openLogin = () => document.getElementById('loginModal').style.display = 'flex';
-        window.closeLogin = () => document.getElementById('loginModal').style.display = 'none';
-
-        window.adminLogin = async function() {
-            const email = document.getElementById('adminEmail').value;
-            const pass = document.getElementById('adminPass').value;
-            try {
-                await signInWithEmailAndPassword(auth, email, pass);
-                closeLogin();
-            } catch (err) {
-                alert("Giriş başarısız: " + err.message);
-            }
-        };
-
-        window.adminLogout = () => signOut(auth);
-
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                closeDrawer();
-                document.getElementById('infoBanner').style.display = 'none';
-                document.getElementById('loginBtn').style.display = 'none';
-                document.getElementById('adminControls').style.display = 'flex';
-                loadPins();
-            } else {
-                document.getElementById('infoBanner').style.display = 'block';
-                document.getElementById('loginBtn').style.display = 'block';
-                document.getElementById('adminControls').style.display = 'none';
-                clearMarkers();
-            }
-        });
-
-        function clearMarkers() {
-            adminMarkers.forEach(m => map.removeLayer(m));
-            adminMarkers = [];
-        }
-
-        function getCategoryStyle(type) {
-            if (type === 'Olumlu Görüş') return { bg: '#27ae60', text: '#ffffff' };
-            if (type === 'Geliştirme Talebi') return { bg: '#e67e22', text: '#ffffff' };
-            if (type === 'Yatırım Talebi') return { bg: '#f1c40f', text: '#1a1a1a' };
-            return { bg: '#7f8c8d', text: '#ffffff' };
-        }
-
-        // Verileri Çekme
-        async function loadPins() {
-            allPinsData = [];
-            const q = query(collection(db, "pins"), orderBy("createdAt", "asc"));
-            const querySnapshot = await getDocs(q);
-            
-            let index = 1;
-            querySnapshot.forEach((docSnap) => {
-                const data = docSnap.data();
-                let datePart = 'Belirtilmemiş';
-                let timePart = '-';
-                
-                if (data.createdAt) {
-                    const d = data.createdAt.toDate();
-                    datePart = d.toLocaleDateHaklısın, CSV dosyası direkt çift tıklanınca Excel'de tek sütuna sıkışıp okunmaz hale gelebiliyor. Bunu kökten çözmek için koda gerçek bir **Excel (.xlsx) kütüphanesi (SheetJS)** entegre ettim.
-
-**Yapılan İyileştirmeler:**
-* **Gerçek ve Geniş Sütunlu `.xlsx` Dosyası:** İndir butonuna bastığında artık uyduruk bir metin dosyası değil, doğrudan profesyonel bir `.xlsx` Excel tablosu iner. Sütun genişlikleri özel olarak ayarlanmıştır; özellikle **"Öğrenci Görüşü / Önerisi"** sütunu **65 karakter genişliğinde** açılır, böylece uzun yorumlar bile kesilmeden okunur.
-* **Ayrılmış Tarih ve Saat Sütunları:** Raporlamada filtreleme yapabilmen için **Tarih** (`25.11.2026`) ve **Saat** (`21:09`) ayrı sütunlar halinde tabloya eklendi.
-* **Samimi ve Güven Veren Anonimlik Dili:** Resmi ve soğuk uyarılar yerine öğrencinin kendini rahat hissedeceği, kulüp/öğrenci dostu samimi bir dil kullanıldı.
-
-Aşağıdaki güncel kodu kopyalayıp GitHub'daki `index.html` dosyanın üzerine yapıştırman yeterli:
-
-```html
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Kampüs Memnuniyet ve Talep Haritası</title>
-    <link rel="stylesheet" href="[https://unpkg.com/leaflet@1.9.4/dist/leaflet.css](https://unpkg.com/leaflet@1.9.4/dist/leaflet.css)" />
-    <script src="[https://unpkg.com/leaflet@1.9.4/dist/leaflet.js](https://unpkg.com/leaflet@1.9.4/dist/leaflet.js)"></script>
-    <!-- Gerçek Excel (.xlsx) Oluşturma Kütüphanesi -->
-    <script src="[https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js](https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js)"></script>
-    <script type="module">
-        import { initializeApp } from "[https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js](https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js)";
-        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp, query, orderBy } from "[https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js](https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js)";
-        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "[https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js](https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js)";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyDB5gBNWtzrZAk4do8HdC0sR3_rB37Iqhs",
-            authDomain: "kampus-gorus-haritasi77.firebaseapp.com",
-            projectId: "kampus-gorus-haritasi77",
-            storageBucket: "kampus-gorus-haritasi77.firebasestorage.app",
-            messagingSenderId: "761474558310",
-            appId: "1:761474558310:web:8d51681b37c8d1cd27c0a7"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-
-        // HARİTA PİKSEL ÖLÇÜLERİ (2500x1768)
-        const imgWidth = 2500;  
-        const imgHeight = 1768; 
-
-        const map = L.map('map', {
-            crs: L.CRS.Simple,
-            minZoom: -2,
-            maxZoom: 2
-        });
-
-        const bounds = [[0, 0], [imgHeight, imgWidth]];
-        L.imageOverlay('harita.jpg', bounds).addTo(map);
-        map.fitBounds(bounds);
-
-        let tempMarker = null;
-        let selectedCoords = null;
-        let adminMarkers = [];
-        let allPinsData = [];
-
-        // Öğrenci Haritaya Tıkladığında
-        map.on('click', function(e) {
-            if (auth.currentUser) return;
-            selectedCoords = e.latlng;
-            
-            if (tempMarker) map.removeLayer(tempMarker);
-            
-            const targetIcon = L.divIcon({
-                className: 'target-pin',
-                html: `<div style="position:relative; width:24px; height:24px;">
-                        <div style="position:absolute; top:0; left:0; width:24px; height:24px; background:rgba(52, 152, 219, 0.35); border-radius:50%; animation: pulse 1.5s infinite;"></div>
-                        <div style="position:absolute; top:5px; left:5px; width:14px; height:14px; background:#2980b9; border:2px solid white; border-radius:50%; box-shadow:0 2px 5px rgba(0,0,0,0.5);"></div>
-                       </div>`,
-                iconSize: [24, 24],
-                iconAnchor: [12, 12]
-            });
-
-            tempMarker = L.marker(selectedCoords, { icon: targetIcon, draggable: true }).addTo(map);
-            
-            tempMarker.on('dragend', function(event) {
-                selectedCoords = event.target.getLatLng();
-            });
-
-            const targetPoint = map.project(selectedCoords, map.getZoom());
-            targetPoint.y += window.innerHeight * 0.22; 
-            map.panTo(map.unproject(targetPoint, map.getZoom()), { animate: true });
-
-            document.getElementById('infoBanner').style.display = 'none';
-            document.getElementById('feedbackDrawer').classList.add('open');
-        });
-
-        // Form Gönderme
         window.submitFeedback = async function() {
             const type = document.getElementById('type').value;
             const zone = document.getElementById('zone').value;
@@ -294,7 +108,6 @@ Aşağıdaki güncel kodu kopyalayıp GitHub'daki `index.html` dosyanın üzerin
             if (!auth.currentUser) document.getElementById('infoBanner').style.display = 'block';
         };
 
-        // Admin Giriş / Çıkış
         window.openLogin = () => document.getElementById('loginModal').style.display = 'flex';
         window.closeLogin = () => document.getElementById('loginModal').style.display = 'none';
 
@@ -338,7 +151,6 @@ Aşağıdaki güncel kodu kopyalayıp GitHub'daki `index.html` dosyanın üzerin
             return { bg: '#7f8c8d', text: '#ffffff' };
         }
 
-        // Verileri Çekme
         async function loadPins() {
             allPinsData = [];
             const q = query(collection(db, "pins"), orderBy("createdAt", "asc"));
@@ -372,7 +184,6 @@ Aşağıdaki güncel kodu kopyalayıp GitHub'daki `index.html` dosyanın üzerin
             renderPins('ALL');
         }
 
-        // Harita Üzerinde Renkli ve Numaralı Pin Çizimi
         window.renderPins = function(filterType) {
             clearMarkers();
             const filtered = filterType === 'ALL' ? allPinsData : allPinsData.filter(p => p.type === filterType);
@@ -408,40 +219,57 @@ Aşağıdaki güncel kodu kopyalayıp GitHub'daki `index.html` dosyanın üzerin
             }
         };
 
-        // Düzenli ve Geniş Sütunlu Gerçek Excel (.xlsx) Rapor İndirme
+        // Geniş Sütunlu, Renkli Başlıklı Gerçek Excel Tablosu (.xls) İndirme
         window.exportExcel = function() {
             if (allPinsData.length === 0) return alert("İndirilecek kayıt bulunamadı.");
             
-            const excelRows = allPinsData.map(row => ({
-                "Pin No": row.no,
-                "Tarih": row.date,
-                "Saat": row.time,
-                "Bildirim Türü": row.type,
-                "İlgili Bölge / Birim": row.zone,
-                "Öğrenci Görüşü / Önerisi": row.comment,
-                "Harita X Konumu": row.lng,
-                "Harita Y Konumu": row.lat
-            }));
+            let tableHTML = `
+                <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+                <head><meta charset="UTF-8"></head>
+                <body>
+                <table border="1" style="border-collapse:collapse; font-family:Calibri, Arial, sans-serif; font-size:11pt;">
+                    <thead>
+                        <tr style="background-color:#2c3e50; color:#ffffff; font-weight:bold; text-align:center; height:30px;">
+                            <th style="width:60px;">Pin No</th>
+                            <th style="width:100px;">Tarih</th>
+                            <th style="width:70px;">Saat</th>
+                            <th style="width:150px;">Bildirim Türü</th>
+                            <th style="width:190px;">İlgili Bölge / Birim</th>
+                            <th style="width:450px;">Öğrenci Görüşü / Önerisi</th>
+                            <th style="width:110px;">Harita X</th>
+                            <th style="width:110px;">Harita Y</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
 
-            const worksheet = XLSX.utils.json_to_sheet(excelRows);
+            allPinsData.forEach(row => {
+                const safeComment = row.comment.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
+                tableHTML += `
+                    <tr>
+                        <td style="text-align:center; vertical-align:top;">${row.no}</td>
+                        <td style="text-align:center; vertical-align:top;">${row.date}</td>
+                        <td style="text-align:center; vertical-align:top;">${row.time}</td>
+                        <td style="vertical-align:top; font-weight:bold;">${row.type}</td>
+                        <td style="vertical-align:top;">${row.zone}</td>
+                        <td style="vertical-align:top; white-space:normal; word-wrap:break-word;">${safeComment}</td>
+                        <td style="text-align:center; vertical-align:top;">${row.lng}</td>
+                        <td style="text-align:center; vertical-align:top;">${row.lat}</td>
+                    </tr>
+                `;
+            });
 
-            // Sütun genişliklerini içeriklerin tam okunması için ayarla
-            worksheet['!cols'] = [
-                { wch: 8 },   // Pin No
-                { wch: 13 },  // Tarih
-                { wch: 9 },   // Saat
-                { wch: 20 },  // Bildirim Türü
-                { wch: 26 },  // İlgili Bölge
-                { wch: 65 },  // Öğrenci Görüşü (Geniş alan)
-                { wch: 16 },  // X
-                { wch: 16 }   // Y
-            ];
+            tableHTML += `</tbody></table></body></html>`;
 
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "Kampüs Geri Bildirimleri");
-
+            const blob = new Blob(['\uFEFF', tableHTML], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
             const today = new Date().toISOString().slice(0, 10);
-            XLSX.writeFile(workbook, `Kampus_Geri_Bildirim_Raporu_${today}.xlsx`);
+            link.download = `Kampus_Geri_Bildirim_Raporu_${today}.xls`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         };
     </script>
     <style>
@@ -461,7 +289,6 @@ Aşağıdaki güncel kodu kopyalayıp GitHub'daki `index.html` dosyanın üzerin
         .btn-logout { background: #e74c3c; color: white; }
         .filter-select { background: white; color: #333; }
         
-        /* Alt Çekmece */
         .bottom-drawer {
             position: fixed; bottom: -100%; left: 50%; transform: translateX(-50%);
             width: 100%; max-width: 480px; background: white; z-index: 2000;
@@ -504,14 +331,13 @@ Aşağıdaki güncel kodu kopyalayıp GitHub'daki `index.html` dosyanın üzerin
                 <option value="Geliştirme Talebi">🟠 Geliştirme Talepleri</option>
                 <option value="Yatırım Talebi">🟡 Yatırım Talepleri</option>
             </select>
-            <button class="btn-excel" onclick="exportExcel()">📊 Excel (.xlsx) İndir</button>
+            <button class="btn-excel" onclick="exportExcel()">📊 Excel İndir</button>
             <button class="btn-logout" onclick="adminLogout()">Çıkış</button>
         </div>
     </div>
 
     <div id="map"></div>
 
-    <!-- Kompakt Alt Çekmece Formu -->
     <div id="feedbackDrawer" class="bottom-drawer">
         <div class="drawer-header">
             <strong style="font-size:14px; color:#2c3e50;">📍 Bu Nokta Hakkında Ne Düşünüyorsun?</strong>
@@ -552,7 +378,6 @@ Aşağıdaki güncel kodu kopyalayıp GitHub'daki `index.html` dosyanın üzerin
         </div>
     </div>
 
-    <!-- Admin Giriş Penceresi -->
     <div id="loginModal" class="modal">
         <div class="modal-content">
             <h3 style="margin:0; color:#2c3e50;">Yönetici Girişi</h3>
