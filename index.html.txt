@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kampüs Geri Bildirim Haritası</title>
+    <!-- Harita Kütüphanesi (Leaflet) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        // 1. BURAYA FIREBASE'DEN ALDIĞIN CONFIG KODUNU YAPIŞTIR
+        const firebaseConfig = {
+            apiKey: "AIzaSyDB5gBNWtzrZAk4do8HdC0sR3_rB37Iqhs",
+            authDomain: "kampus-gorus-haritasi77.firebaseapp.com",
+            projectId: "kampus-gorus-haritasi77",
+            storageBucket: "kampus-gorus-haritasi77.firebasestorage.app",
+            messagingSenderId: "761474558310",
+            appId: "1:761474558310:web:8d51681b37c8d1cd27c0a7"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // 2. HARİTA AYARLARI (JPG Boyutunu Buraya Gir - Örn: 2000x1500)
+        const imgWidth = 2500;  // JPG resminin genişliği (piksel)
+        const imgHeight = 1768; // JPG resminin yüksekliği (piksel)
+
+        const map = L.map('map', {
+            crs: L.CRS.Simple,
+            minZoom: -2,
+            maxZoom: 2
+        });
+
+        const bounds = [[0, 0], [imgHeight, imgWidth]];
+        L.imageOverlay('harita.jpg', bounds).addTo(map);
+        map.fitBounds(bounds);
+
+        let tempMarker = null;
+        let selectedCoords = null;
+        let adminMarkers = [];
+
+        // Öğrenci Haritaya Tıkladığında
+        map.on('click', function(e) {
+            if (auth.currentUser) return; // Admin modundaysa yeni pin ekleme formu açma
+            selectedCoords = e.latlng;
+            if (tempMarker) map.removeLayer(tempMarker);
+            tempMarker = L.marker(selectedCoords).addTo(map);
+            document.getElementById('feedbackModal').style.display = 'flex';
+        });
+
+        // Form Gönderme
+        window.submitFeedback = async function() {
+            const type = document.getElementById('type').value;
+            const comment = document.getElementById('comment').value.trim();
+            if (!comment) return alert("Lütfen bir mesaj yazın.");
+
+            try {
+                await addDoc(collection(db, "pins"), {
+                    type: type,
+                    comment: comment,
+                    lat: selectedCoords.lat,
+                    lng: selectedCoords.lng,
+                    createdAt: serverTimestamp()
+                });
+                alert("Geri bildiriminiz başarıyla iletildi. Teşekkür ederiz!");
+                closeModal();
+            } catch (err) {
+                alert("Hata oluştu: " + err.message);
+            }
+        };
+
+        window.closeModal = function() {
+            document.getElementById('feedbackModal').style.display = 'none';
+            document.getElementById('comment').value = '';
+            if (tempMarker) map.removeLayer(tempMarker);
+        };
+
+        // Admin Giriş / Çıkış İşlemleri
+        window.openLogin = () => document.getElementById('loginModal').style.display = 'flex';
+        window.closeLogin = () => document.getElementById('loginModal').style.display = 'none';
+
+        window.adminLogin = async function() {
+            const email = document.getElementById('adminEmail').value;
+            const pass = document.getElementById('adminPass').value;
+            try {
+                await signInWithEmailAndPassword(auth, email, pass);
+                closeLogin();
+            } catch (err) {
+                alert("Giriş başarısız: " + err.message);
+            }
+        };
+
+        window.adminLogout = () => signOut(auth);
+
+        // Admin Durumunu Dinle ve Pinleri Yükle
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                document.getElementById('loginBtn').style.display = 'none';
+                document.getElementById('adminControls').style.display = 'flex';
+                loadPins();
+            } else {
+                document.getElementById('loginBtn').style.display = 'block';
+                document.getElementById('adminControls').style.display = 'none';
+                adminMarkers.forEach(m => map.removeLayer(m));
+                adminMarkers = [];
+            }
+        });
+
+        // Veritabanındaki Pinleri Haritaya Çiz (Sadece Admin Görür)
+        async function loadPins() {
+            adminMarkers.forEach(m => map.removeLayer(m));
+            adminMarkers = [];
+            const querySnapshot = await getDocs(collection(db, "pins"));
+            
+            querySnapshot.forEach((docSnap) => {
+                const data = docSnap.data();
+                const color = data.type === 'Talep' ? 'red' : 'green';
+                
+                const markerIcon = L.divIcon({
+                    className: 'custom-pin',
+                    html: `<div style="background:${color}; width:18px; height:18px; border-radius:50%; border:3px solid white; box-shadow:0 0 5px rgba(0,0,0,0.5);"></div>`
+                });
+
+                const marker = L.marker([data.lat, data.lng], { icon: markerIcon }).addTo(map);
+                marker.bindPopup(`
+                    <b>Tür:</b> ${data.type}<br>
+                    <b>Mesaj:</b> ${data.comment}<br><br>
+                    <button onclick="deletePin('${docSnap.id}')" style="background:#dc3545; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">Sil</button>
+                `);
+                adminMarkers.push(marker);
+            });
+        }
+
+        window.deletePin = async function(id) {
+            if(confirm("Bu pini silmek istediğinize emin misiniz?")) {
+                await deleteDoc(doc(db, "pins", id));
+                loadPins();
+            }
+        };
+    </script>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; }
+        #map { width: 100%; height: 100vh; background: #e5e5e5; }
+        .top-bar { position: absolute; top: 15px; right: 15px; z-index: 1000; display: flex; gap: 10px; }
+        .info-banner { position: absolute; top: 15px; left: 50px; z-index: 1000; background: white; padding: 10px 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.15); font-size: 14px; font-weight: bold; }
+        button { padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .btn-admin { background: #2c3e50; color: white; }
+        .btn-logout { background: #e74c3c; color: white; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 20px; border-radius: 10px; width: 90%; max-width: 350px; display: flex; flex-direction: column; gap: 12px; }
+        select, textarea, input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+
+    <div class="info-banner">📍 Görüş veya talebinizi iletmek için haritada ilgili noktaya tıklayın.</div>
+
+    <div class="top-bar">
+        <button id="loginBtn" class="btn-admin" onclick="openLogin()">Admin Girişi</button>
+        <div id="adminControls" style="display:none; gap:10px;">
+            <span style="background:white; padding:8px 12px; border-radius:6px; font-size:13px;">🔴 Talep | 🟢 Teşekkür</span>
+            <button class="btn-logout" onclick="adminLogout()">Çıkış Yap</button>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <!-- Öğrenci Form Penceresi -->
+    <div id="feedbackModal" class="modal">
+        <div class="modal-content">
+            <h3 style="margin:0;">Konuma Not Bırak</h3>
+            <label>Kategori:</label>
+            <select id="type">
+                <option value="Talep">🔴 Talep / Öneri</option>
+                <option value="Teşekkür">🟢 Teşekkür / Memnuniyet</option>
+            </select>
+            <label>Mesajınız:</label>
+            <textarea id="comment" rows="4" placeholder="Düşüncelerinizi buraya yazın..."></textarea>
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+                <button onclick="closeModal()" style="background:#95a5a6; color:white;">İptal</button>
+                <button onclick="submitFeedback()" style="background:#27ae60; color:white;">Gönder</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Giriş Penceresi -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <h3 style="margin:0;">Yönetici Girişi</h3>
+            <input type="email" id="adminEmail" placeholder="Admin E-posta">
+            <input type="password" id="adminPass" placeholder="Şifre">
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+                <button onclick="closeLogin()" style="background:#95a5a6; color:white;">İptal</button>
+                <button onclick="adminLogin()" style="background:#2c3e50; color:white;">Giriş Yap</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
