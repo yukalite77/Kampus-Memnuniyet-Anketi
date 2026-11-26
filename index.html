@@ -43,7 +43,6 @@
         let allPinsData = [];
 
         // GİZLİ YÖNETİCİ GİRİŞİ TETİKLEYİCİLERİ
-        // 1. URL sonuna #admin eklendiğinde (Örn: site.com/#admin)
         function checkSecretHash() {
             if (window.location.hash === '#admin' && !auth.currentUser) {
                 openLogin();
@@ -52,7 +51,6 @@
         window.addEventListener('hashchange', checkSecretHash);
         window.addEventListener('DOMContentLoaded', checkSecretHash);
 
-        // 2. Sol üstteki 📍 ikonuna 5 kez hızlıca tıklayınca
         let secretClicks = 0;
         let secretTimer = null;
         window.triggerSecretAdmin = function() {
@@ -172,10 +170,10 @@
         }
 
         function getCategoryStyle(type) {
-            if (type === 'Olumlu Görüş') return { bg: '#27ae60', text: '#ffffff' };
-            if (type === 'Geliştirme Talebi') return { bg: '#e67e22', text: '#ffffff' };
-            if (type === 'Yatırım Talebi') return { bg: '#f1c40f', text: '#1a1a1a' };
-            return { bg: '#7f8c8d', text: '#ffffff' };
+            if (type === 'Olumlu Görüş') return { bg: '#27ae60', text: '#ffffff', isStar: false };
+            if (type === 'Geliştirme Talebi') return { bg: '#e67e22', text: '#ffffff', isStar: false };
+            if (type === 'Altyapı Talebi' || type === 'Yatırım Talebi') return { bg: '#f1c40f', text: '#1a1a1a', isStar: true };
+            return { bg: '#7f8c8d', text: '#ffffff', isStar: false };
         }
 
         async function loadPins() {
@@ -213,22 +211,45 @@
 
         window.renderPins = function(filterType) {
             clearMarkers();
-            const filtered = filterType === 'ALL' ? allPinsData : allPinsData.filter(p => p.type === filterType);
+            const filtered = filterType === 'ALL' 
+                ? allPinsData 
+                : filterType === 'Altyapı Talebi'
+                    ? allPinsData.filter(p => p.type === 'Altyapı Talebi' || p.type === 'Yatırım Talebi')
+                    : allPinsData.filter(p => p.type === filterType);
+
             document.getElementById('pinCount').innerText = `Toplam: ${filtered.length}`;
 
             filtered.forEach((item) => {
                 const style = getCategoryStyle(item.type);
-                const markerIcon = L.divIcon({
-                    className: 'custom-pin',
-                    html: `<div style="background:${style.bg}; color:${style.text}; font-weight:bold; font-size:11px; width:24px; height:24px; border-radius:50%; border:2px solid white; box-shadow:0 2px 6px rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center;">${item.no}</div>`,
-                    iconSize: [24, 24],
-                    iconAnchor: [12, 12]
-                });
+                let markerIcon;
+
+                if (style.isStar) {
+                    // Altyapı Talebi için Yıldız İkonu
+                    markerIcon = L.divIcon({
+                        className: 'custom-star-pin',
+                        html: `<div style="position:relative; width:34px; height:34px; display:flex; align-items:center; justify-content:center; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.45));">
+                                <svg viewBox="0 0 24 24" width="34" height="34" fill="#f1c40f" stroke="#ffffff" stroke-width="1.5">
+                                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                </svg>
+                                <span style="position:absolute; top:52%; left:50%; transform:translate(-50%, -50%); font-size:10px; font-weight:800; color:#1a1a1a;">${item.no}</span>
+                               </div>`,
+                        iconSize: [34, 34],
+                        iconAnchor: [17, 17]
+                    });
+                } else {
+                    // Olumlu (Yeşil) ve Geliştirme (Turuncu) Daire Pinler
+                    markerIcon = L.divIcon({
+                        className: 'custom-pin',
+                        html: `<div style="background:${style.bg}; color:${style.text}; font-weight:bold; font-size:11px; width:24px; height:24px; border-radius:50%; border:2px solid white; box-shadow:0 2px 6px rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center;">${item.no}</div>`,
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12]
+                    });
+                }
 
                 const marker = L.marker([item.lat, item.lng], { icon: markerIcon }).addTo(map);
                 marker.bindPopup(`
                     <div style="min-width:220px; font-size:13px;">
-                        <div style="display:inline-block; background:${style.bg}; color:${style.text}; padding:2px 8px; border-radius:4px; font-weight:bold; font-size:11px; margin-bottom:4px;">#${item.no} • ${item.type}</div>
+                        <div style="display:inline-block; background:${style.bg}; color:${style.text}; padding:2px 8px; border-radius:4px; font-weight:bold; font-size:11px; margin-bottom:4px;">${style.isStar ? '⭐ ' : ''}#${item.no} • ${item.type}</div>
                         <div style="font-weight:bold; color:#2c3e50; margin-bottom:2px;">📍 ${item.zone}</div>
                         <div style="color:#777; font-size:11px; margin-bottom:8px;">📅 ${item.date} • ⏰ ${item.time}</div>
                         <div style="background:#f8f9fa; padding:8px; border-radius:4px; border-left:3px solid ${style.bg}; margin-bottom:10px; line-height:1.4; word-wrap:break-word;">${item.comment}</div>
@@ -351,10 +372,10 @@
         <div id="adminControls" style="display:none; gap:6px; align-items:center; flex-wrap:wrap;">
             <span id="pinCount" style="background:white; padding:7px 10px; border-radius:6px; font-size:12px; font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.2);">Toplam: 0</span>
             <select class="filter-select" onchange="renderPins(this.value)">
-                <option value="ALL">Tümü (🟢+🟠+🟡)</option>
+                <option value="ALL">Tümü (🟢+🟠+⭐)</option>
                 <option value="Olumlu Görüş">🟢 Olumlu Görüşler</option>
                 <option value="Geliştirme Talebi">🟠 Geliştirme Talepleri</option>
-                <option value="Yatırım Talebi">🟡 Yatırım Talepleri</option>
+                <option value="Altyapı Talebi">⭐ Altyapı Talepleri</option>
             </select>
             <button class="btn-excel" onclick="exportExcel()">📊 Excel İndir</button>
             <button class="btn-logout" onclick="adminLogout()">Çıkış</button>
@@ -377,7 +398,7 @@
                 <select id="type">
                     <option value="Olumlu Görüş">🟢 Olumlu Görüş</option>
                     <option value="Geliştirme Talebi">🟠 Geliştirme Talebi</option>
-                    <option value="Yatırım Talebi">🟡 Yatırım Talebi</option>
+                    <option value="Altyapı Talebi">⭐ Altyapı Talebi</option>
                 </select>
             </div>
             <div>
